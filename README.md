@@ -58,4 +58,4 @@ AI detects user intent:
 - Backend → Render
 
 
-## 📁 Folder Structure
+
