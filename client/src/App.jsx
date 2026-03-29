@@ -12,6 +12,7 @@ function App() {
   const [nameSubmitted, setNameSubmitted] = useState(false)
 
   const [listedPrice, setListedPrice] = useState(5000)
+  const [minimumPrice, setMinimumPrice] = useState(null)
   const [product, setProduct] = useState("Product")
   const [sellerType, setSellerType] = useState("")
   const [messages, setMessages] = useState([])
@@ -45,6 +46,7 @@ function App() {
 
       setProduct(data.product)
       setListedPrice(data.listedPrice)
+      setMinimumPrice(data.minimumPrice)
       setSellerType(data.sellerType)
 
       setMessages([
@@ -101,6 +103,7 @@ function App() {
     setSellerType("")
     setProduct("Product")
     setListedPrice(5000)
+    setMinimumPrice(null)
     fetchLeaderboard()
   }
 
@@ -182,7 +185,10 @@ function App() {
           sellerType,
           userMessage: userText,
           previousOffers,
-          previousMessages
+          previousMessages,
+          listedPrice,
+          minimumPrice,
+          product
         })
       })
 
@@ -224,7 +230,7 @@ function App() {
     return (
       <div className="auth-screen">
         <div className="auth-card">
-          <h1>Negotix🧠</h1>
+          <h1>Negotiation Game 🧠💰</h1>
           <p className="auth-subtitle">Enter your name to start bargaining</p>
 
           <input

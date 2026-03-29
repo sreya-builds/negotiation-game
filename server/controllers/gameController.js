@@ -1,27 +1,23 @@
 const Score = require("../models/Score")
+const PRODUCTS = require("../utils/products")
 
-const LISTED_PRICE = 5000
 const MAX_ROUNDS = 5
 
 const SELLER_PERSONALITIES = {
   friendly: {
     name: "Friendly Seller",
-    minimumPrice: 3400,
     openingLine: "I like fair deals. Give me a good offer."
   },
   aggressive: {
     name: "Aggressive Seller",
-    minimumPrice: 3700,
     openingLine: "I don't waste time on bad offers. Be serious."
   },
   smart: {
     name: "Smart Seller",
-    minimumPrice: 3500,
     openingLine: "Convince me with a strong offer and good reasoning."
   },
   pressure: {
     name: "Pressure Seller",
-    minimumPrice: 3600,
     openingLine: "This price may not stay for long. Make your move quickly."
   }
 }
@@ -30,6 +26,11 @@ const getRandomSellerType = () => {
   const sellerTypes = Object.keys(SELLER_PERSONALITIES)
   const randomIndex = Math.floor(Math.random() * sellerTypes.length)
   return sellerTypes[randomIndex]
+}
+
+const getRandomProduct = () => {
+  const randomIndex = Math.floor(Math.random() * PRODUCTS.length)
+  return PRODUCTS[randomIndex]
 }
 
 const detectTactic = (message = "") => {
@@ -85,13 +86,15 @@ const detectTactic = (message = "") => {
 const startGame = (req, res) => {
   const sellerType = getRandomSellerType()
   const seller = SELLER_PERSONALITIES[sellerType]
+  const product = getRandomProduct()
 
   res.json({
-    product: "Wireless Headphones",
-    listedPrice: LISTED_PRICE,
+    product: product.name,
+    listedPrice: product.listedPrice,
+    minimumPrice: product.minPrice,
     maxRounds: MAX_ROUNDS,
     sellerType,
-    message: `Welcome! This product costs ₹${LISTED_PRICE}. ${seller.openingLine}`
+    message: `Welcome! This product costs ₹${product.listedPrice}. ${seller.openingLine}`
   })
 }
 
@@ -103,13 +106,34 @@ const negotiatePrice = (req, res) => {
     sellerType,
     userMessage,
     previousOffers = [],
-    previousMessages = []
+    previousMessages = [],
+    listedPrice,
+    minimumPrice,
+    product
   } = req.body
 
-  const seller = SELLER_PERSONALITIES[sellerType] || SELLER_PERSONALITIES.smart
-  const minimumPrice = seller.minimumPrice
   const safePlayerName = playerName?.trim() || "Player"
+  const safeListedPrice = Number(listedPrice)
+  const safeMinimumPrice = Number(minimumPrice)
   const tactic = detectTactic(userMessage)
+
+  if (!offer) {
+    return res.status(400).json({
+      reply: "Please enter a valid offer.",
+      gameOver: false,
+      acceptedPrice: null,
+      tactic
+    })
+  }
+
+  if (!safeListedPrice || !safeMinimumPrice) {
+    return res.status(400).json({
+      reply: "Game pricing data is missing. Please restart the game.",
+      gameOver: true,
+      acceptedPrice: null,
+      tactic
+    })
+  }
 
   const lastOffer =
     previousOffers.length > 0
@@ -130,38 +154,29 @@ const negotiatePrice = (req, res) => {
       )
     }).length >= 2
 
-  if (!offer) {
-    return res.status(400).json({
-      reply: "Please enter a valid offer",
-      gameOver: false,
-      acceptedPrice: null,
-      tactic
-    })
-  }
-
   if (round >= MAX_ROUNDS) {
     return res.json({
-      reply: `Time's up, ${safePlayerName}. Negotiation closed.`,
+      reply: `Time's up, ${safePlayerName}. Negotiation closed for ${product || "this item"}.`,
       gameOver: true,
       acceptedPrice: null,
       tactic
     })
   }
 
-  if (offer > LISTED_PRICE) {
+  if (offer > safeListedPrice) {
     return res.json({
-      reply: `${safePlayerName}, the listed price is ₹${LISTED_PRICE}. You don't need to offer more than that. Try negotiating at or below the listed price.`,
+      reply: `${safePlayerName}, the listed price is ₹${safeListedPrice}. You don't need to offer more than that. Try negotiating at or below the listed price.`,
       gameOver: false,
       acceptedPrice: null,
       tactic
     })
   }
 
-  if (offer === LISTED_PRICE) {
+  if (offer === safeListedPrice) {
     return res.json({
-      reply: `Fair enough, ${safePlayerName}. I can close the deal at the listed price of ₹${LISTED_PRICE}.`,
+      reply: `Fair enough, ${safePlayerName}. I can close the deal at the listed price of ₹${safeListedPrice}.`,
       gameOver: true,
-      acceptedPrice: LISTED_PRICE,
+      acceptedPrice: safeListedPrice,
       tactic
     })
   }
@@ -184,7 +199,7 @@ const negotiatePrice = (req, res) => {
     })
   }
 
-  if (improvedOffer && offer < minimumPrice) {
+  if (improvedOffer && offer < safeMinimumPrice) {
     return res.json({
       reply: `${safePlayerName}, that's better than your last offer. You're moving in the right direction, but I still need a bit more.`,
       gameOver: false,
@@ -202,7 +217,7 @@ const negotiatePrice = (req, res) => {
     })
   }
 
-  if (offer >= minimumPrice) {
+  if (offer >= safeMinimumPrice) {
     let successReply = ""
 
     if (tactic === "student") {
@@ -231,7 +246,7 @@ const negotiatePrice = (req, res) => {
     })
   }
 
-  if (tactic === "student" && offer >= minimumPrice - 300) {
+  if (tactic === "student" && offer >= safeMinimumPrice - 300) {
     return res.json({
       reply: `${safePlayerName}, I understand you're a student. I still can't accept ₹${offer}, but I'll make it easier for you. Try a slightly better offer.`,
       gameOver: false,
@@ -240,7 +255,7 @@ const negotiatePrice = (req, res) => {
     })
   }
 
-  if (tactic === "budget" && offer >= minimumPrice - 250) {
+  if (tactic === "budget" && offer >= safeMinimumPrice - 250) {
     return res.json({
       reply: `I understand your budget, ${safePlayerName}. You're close. Increase a little and we may have a deal.`,
       gameOver: false,
@@ -267,51 +282,51 @@ const negotiatePrice = (req, res) => {
     })
   }
 
-  const gap = minimumPrice - offer
+  const gap = safeMinimumPrice - offer
   let reply = ""
 
   if (sellerType === "friendly") {
     if (gap >= 1000) {
-      const counter = Math.max(minimumPrice, LISTED_PRICE - round * 300)
+      const counter = Math.max(safeMinimumPrice, safeListedPrice - round * 300)
       reply = `${safePlayerName}, that's too low, but I can still offer ₹${counter}.`
     } else if (gap >= 500) {
-      const counter = Math.max(minimumPrice, LISTED_PRICE - round * 350)
+      const counter = Math.max(safeMinimumPrice, safeListedPrice - round * 350)
       reply = `You're getting closer, ${safePlayerName}. How about ₹${counter}?`
     } else {
-      const counter = Math.max(minimumPrice, offer + 150)
+      const counter = Math.max(safeMinimumPrice, offer + 150)
       reply = `That's a fair try, ${safePlayerName}. If you can do ₹${counter}, it's yours.`
     }
   } else if (sellerType === "aggressive") {
     if (gap >= 1000) {
-      const counter = Math.max(minimumPrice, LISTED_PRICE - round * 150)
+      const counter = Math.max(safeMinimumPrice, safeListedPrice - round * 150)
       reply = `${safePlayerName}, that's not even close. Best I can do is ₹${counter}.`
     } else if (gap >= 500) {
-      const counter = Math.max(minimumPrice, LISTED_PRICE - round * 200)
+      const counter = Math.max(safeMinimumPrice, safeListedPrice - round * 200)
       reply = `Still low, ${safePlayerName}. ₹${counter}, final enough.`
     } else {
-      const counter = Math.max(minimumPrice, offer + 250)
+      const counter = Math.max(safeMinimumPrice, offer + 250)
       reply = `You're almost there, ${safePlayerName}. ₹${counter} and we're done.`
     }
   } else if (sellerType === "pressure") {
     if (gap >= 1000) {
-      const counter = Math.max(minimumPrice, LISTED_PRICE - round * 220)
+      const counter = Math.max(safeMinimumPrice, safeListedPrice - round * 220)
       reply = `${safePlayerName}, too low. ₹${counter}. Decide fast.`
     } else if (gap >= 500) {
-      const counter = Math.max(minimumPrice, LISTED_PRICE - round * 260)
+      const counter = Math.max(safeMinimumPrice, safeListedPrice - round * 260)
       reply = `I can do ₹${counter}, but not for long, ${safePlayerName}.`
     } else {
-      const counter = Math.max(minimumPrice, offer + 180)
+      const counter = Math.max(safeMinimumPrice, offer + 180)
       reply = `Last quick chance, ${safePlayerName}. ₹${counter} closes it now.`
     }
   } else {
     if (gap >= 1000) {
-      const counter = Math.max(minimumPrice, LISTED_PRICE - round * 250)
+      const counter = Math.max(safeMinimumPrice, safeListedPrice - round * 250)
       reply = `${safePlayerName}, that offer is too low. I can reduce it to ₹${counter}.`
     } else if (gap >= 500) {
-      const counter = Math.max(minimumPrice, LISTED_PRICE - round * 300)
+      const counter = Math.max(safeMinimumPrice, safeListedPrice - round * 300)
       reply = `You are getting closer, ${safePlayerName}. My counter is ₹${counter}.`
     } else {
-      const counter = Math.max(minimumPrice, offer + 200)
+      const counter = Math.max(safeMinimumPrice, offer + 200)
       reply = `Serious offer, ${safePlayerName}. Let's close at ₹${counter}.`
     }
   }
