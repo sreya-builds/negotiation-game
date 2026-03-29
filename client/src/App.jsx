@@ -230,7 +230,7 @@ function App() {
     return (
       <div className="auth-screen">
         <div className="auth-card">
-          <h1>Negotiation Game 🧠💰</h1>
+          <h1>Negotix🧠</h1>
           <p className="auth-subtitle">Enter your name to start bargaining</p>
 
           <input
